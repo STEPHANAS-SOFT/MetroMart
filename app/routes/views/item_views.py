@@ -9,7 +9,7 @@ from ...shared.api_key_route import verify_api_key
 from ...schemas import ItemResponse, ItemCreate, ItemUpdate
 from ...models import Item, ItemCategory, ItemVariation, ItemAddon, Vendor
 
-router = APIRouter(prefix="/items", tags=["items"])
+router = APIRouter(prefix="/items", tags=["item views"])
 
 
 class ItemAvailabilityUpdate(BaseModel):

@@ -5,7 +5,7 @@ from ...shared.api_key_route import verify_api_key
 from ...shared.database import get_db
 from sqlalchemy.orm import Session
 
-router = APIRouter(prefix="/promotions", tags=["promotions"])
+router = APIRouter(prefix="/promotions", tags=["promotion views"])
 
 
 class Coupon(BaseModel):

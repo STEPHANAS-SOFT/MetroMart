@@ -9,9 +9,9 @@ from decimal import Decimal
 from ...shared.database import get_db
 from ...shared.api_key_route import verify_api_key
 from ...schemas import VendorResponse, VendorCreate, VendorUpdate
-from ...models import Vendor, VendorType, Order, OrderStatus, Item, VendorWallet, WalletTransaction, User
+from ...models import Vendor, VendorType, Order, OrderStatus, Item, VendorWallet, WalletTransaction, User, ItemCategory
 
-router = APIRouter(prefix="/vendors", tags=["vendors"])
+router = APIRouter(prefix="/vendors", tags=["vendor views"])
 
 
 class VendorProfile(BaseModel):
@@ -139,7 +139,16 @@ def get_all_vendors_enhanced(
         )
     
     vendors = query.offset(skip).limit(limit).all()
-    return vendors
+
+    # Calculate average rating for each vendor
+    enhanced_vendors = []
+    for v in vendors:
+        avg_rating = db.query(func.avg(Vendor.rating)).filter(Vendor.id == v.id).scalar() or 0.0
+        v.rating = float(round(avg_rating, 2))  # round to 2 decimal places
+        enhanced_vendors.append(v)
+
+    return enhanced_vendors
+    # return vendors
 
 
 @router.get("/profile/{vendor_id}", response_model=VendorProfile, dependencies=[Depends(verify_api_key)])
@@ -174,8 +183,12 @@ def get_vendor_profile(vendor_id: int, db: Session = Depends(get_db)):
     wallet_balance = float(wallet.balance) if wallet else 0.0
     
     # Rating (placeholder - would be calculated from actual reviews)
-    rating = 4.2  # Placeholder
-    
+    # rating = 4.2  # Placeholder
+
+    rating = db.query(func.avg(Vendor.rating)).filter(Vendor.id == vendor_id).scalar() or 0.0
+    rating = float(round(rating, 2))
+
+
     # Customer metrics
     unique_customers = set(order.user_id for order in orders if order.user_id)
     total_customers = len(unique_customers)
@@ -550,6 +563,7 @@ def get_vendors_near_location(
     lng: float,
     radius_km: float = Query(10.0, ge=0.1, le=50, description="Search radius in kilometers"),
     vendor_type: Optional[VendorType] = Query(None, description="Filter by vendor type"),
+    food_category: Optional[str] = Query(None, description="Filter by food category (e.g., 'Rice Dishes', 'Swallow', 'Soups')"),
     is_open_now: bool = Query(False, description="Filter by currently open vendors"),
     min_rating: Optional[float] = Query(None, ge=0, le=5),
     limit: int = Query(50, ge=1, le=200),
@@ -578,6 +592,21 @@ def get_vendors_near_location(
     if vendor_type:
         query = query.filter(Vendor.vendor_type == vendor_type)
     
+    # # Filter by food category - join with ItemCategory to find vendors selling that category
+    # if food_category:
+    #     query = query.join(ItemCategory).filter(
+    #         ItemCategory.name.ilike(f"%{food_category}%")
+    #     ).distinct()
+
+    if food_category:
+        query = (
+        query.join(Item, Vendor.id == Item.vendor_id)
+             .join(ItemCategory, Item.category_id == ItemCategory.id)
+             .filter(ItemCategory.name.ilike(f"%{food_category}%"))
+             .distinct()
+    )
+
+    
     # Filter by operating hours (simplified - would need proper time handling)
     if is_open_now:
         current_hour = datetime.utcnow().hour
@@ -596,8 +625,15 @@ def get_vendors_near_location(
     for vendor in vendors:
         # Simplified distance calculation
         vendor.distance_km = ((vendor.latitude - lat) ** 2 + (vendor.longitude - lng) ** 2) ** 0.5 * 111
+        # Calculate average rating
+        avg_rating = db.query(func.avg(Vendor.rating)).filter(Vendor.id == vendor.id).scalar() or 0.0
+        vendor.rating = float(round(avg_rating, 2))
     
     # Sort by distance
     vendors.sort(key=lambda v: getattr(v, 'distance_km', float('inf')))
+
+        # Optional: filter by minimum rating
+    if min_rating is not None:
+        vendors = [v for v in vendors if v.rating >= min_rating]
     
     return vendors

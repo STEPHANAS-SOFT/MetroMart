@@ -184,17 +184,40 @@ class GetVendorByNameQueryHandler:
 class GetAllItemQuery:
     pass
 
-
 class GetAllItemQueryHandler:
     def __init__(self, db: Session):
         self.db = db
 
-    def handle(self, query: GetAllItemQuery, skip: int = 0, limit: int = 10):
-        all_items = (self.db.query(Item)
-                    .offset(skip).limit(limit).all()
-                   )
-        # Return empty list if no items found - this is not an error
-        return all_items
+    def handle(
+        self, 
+        query: GetAllItemQuery, 
+        skip: int = 0, 
+        limit: int = 10
+    ):
+        q = self.db.query(Item)
+
+        # Optional filters
+        if query.vendor_id is not None:
+            q = q.filter(Item.vendor_id == query.vendor_id)
+        if query.category_id is not None:
+            q = q.filter(Item.category_id == query.category_id)
+
+        # Pagination
+        items = q.offset(skip).limit(limit).all()
+
+        return items
+
+
+# class GetAllItemQueryHandler:
+#     def __init__(self, db: Session):
+#         self.db = db
+
+#     def handle(self, query: GetAllItemQuery, skip: int = 0, limit: int = 10):
+#         all_items = (self.db.query(Item)
+#                     .offset(skip).limit(limit).all()
+#                    )
+#         # Return empty list if no items found - this is not an error
+#         return all_items
 
 
 # ==========================
@@ -254,6 +277,38 @@ class GetItemByNameQueryHandler:
                 detail=f"No menu items found matching '{search_term}'. Try searching with different keywords or browse all items."
             )
         return item_list
+
+
+# ==========================
+# GET ITEMS BY VENDOR ID
+# ==========================
+@dataclass(frozen=True)
+class GetItemByVendorIdQuery:
+    vendor_id: int
+
+class GetItemByVendorIdQueryHandler:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def handle(self, query: GetItemByVendorIdQuery):
+        # Validate vendor ID
+        if query.vendor_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Invalid vendor ID. Vendor ID must be a positive number."
+            )
+        
+        # Verify vendor exists
+        vendor = self.db.query(Vendor).filter(Vendor.id == query.vendor_id).first()
+        if not vendor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail=f"Vendor with ID {query.vendor_id} not found."
+            )
+        
+        items = self.db.query(Item).filter(Item.vendor_id == query.vendor_id).all()
+        # Return empty list if no items found - vendor may not have items yet
+        return items
 
 
 # ==============================================================================================================
@@ -459,24 +514,32 @@ class GetItemAddonGroupByIdQueryHandler:
         return group
 
 @dataclass(frozen=True)
-class GetItemAddonGroupByItemIdQuery:
-    item_id: int
+class GetItemAddonGroupByVendorIdQuery:
+    vendor_id: int
 
-class GetItemAddonGroupByItemIdQueryHandler:
+class GetItemAddonGroupByVendorIdQueryHandler:
     def __init__(self, db: Session):
         self.db = db
 
-    def handle(self, query: GetItemAddonGroupByItemIdQuery):
-        # Validate item ID
-        if query.item_id <= 0:
+    def handle(self, query: GetItemAddonGroupByVendorIdQuery):
+        # Validate vendor ID
+        if query.vendor_id <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Invalid item ID. Item ID must be a positive number."
+                detail="Invalid vendor ID. Vendor ID must be a positive number."
             )
         
-        groups = self.db.query(ItemAddonGroup).filter(ItemAddonGroup.item_id == query.item_id).all()
-        # Return empty list if no addon groups found - item may not have addon groups
-        return groups
+        # Verify vendor exists
+        vendor = self.db.query(Vendor).filter(Vendor.id == query.vendor_id).first()
+        if not vendor:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail=f"Vendor with ID {query.vendor_id} not found."
+            )
+        
+        addon_groups = self.db.query(ItemAddonGroup).filter(ItemAddonGroup.vendor_id == query.vendor_id).all()
+        # Return empty list if no addon groups found - vendor may not have addon groups yet
+        return addon_groups
 
 
 # ==============================================================================================================

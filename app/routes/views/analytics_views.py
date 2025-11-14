@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from ...shared.api_key_route import verify_api_key
 
-router = APIRouter(prefix="/analytics", tags=["analytics"])
+router = APIRouter(prefix="/analytics", tags=["analytic views"])
 
 
 @router.get("/admin/dashboard", dependencies=[Depends(verify_api_key)])

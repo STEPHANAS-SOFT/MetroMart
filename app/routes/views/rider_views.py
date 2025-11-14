@@ -5,7 +5,7 @@ from ...shared.database import get_db
 from ...shared.api_key_route import verify_api_key
 from ...models import Rider, Order, OrderStatus
 
-router = APIRouter(prefix="/riders", tags=["riders"])
+router = APIRouter(prefix="/riders", tags=["rider views"])
 
 
 @router.get("/{rider_id}/available-orders", dependencies=[Depends(verify_api_key)])

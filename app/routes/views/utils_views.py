@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from ...shared.api_key_route import verify_api_key
 
-router = APIRouter(prefix="/system", tags=["system"])
+router = APIRouter(prefix="/system", tags=["system views"])
 
 
 @router.get("/health", dependencies=[Depends(verify_api_key)])

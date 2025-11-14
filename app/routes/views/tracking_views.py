@@ -6,7 +6,7 @@ from ...shared.api_key_route import verify_api_key
 from ...models import OrderTracking, Order, Rider
 from datetime import datetime
 
-router = APIRouter(prefix="/tracking", tags=["tracking"])
+router = APIRouter(prefix="/tracking", tags=["tracking views"])
 
 
 @router.get("/order/{order_id}/latest", dependencies=[Depends(verify_api_key)])

@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 from ...shared.api_key_route import verify_api_key
 
-router = APIRouter(prefix="/notifications", tags=["notifications"])
+router = APIRouter(prefix="/notifications", tags=["notification views"])
 
 
 class PushNotification(BaseModel):

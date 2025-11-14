@@ -26,6 +26,7 @@ from ..services.queries import (
     GetAllItemQuery, GetAllItemQueryHandler,
     GetItemByIdQuery, GetItemByIdQueryHandler,
     GetItemByNameQuery, GetItemByNameQueryHandler,
+    GetItemByVendorIdQuery, GetItemByVendorIdQueryHandler,
     GetVendorByNameQuery, GetVendorByNameQueryHandler,
     GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler
 )
@@ -267,6 +268,7 @@ def update_vendor(
                                 logo_url=vendor.logo_url,
                                 has_own_delivery=vendor.has_own_delivery,
                                 is_active=vendor.is_active,
+                                rating=vendor.rating,
                                 fcm_token=vendor.fcm_token,
                                 opening_time=vendor.opening_time,
                                 closing_time=vendor.closing_time
@@ -301,7 +303,8 @@ def create_item(
         description=item.description,
         image_url=item.image_url,
         is_available=item.is_available,
-        allows_addons=item.allows_addons
+        allows_addons=item.allows_addons,
+        addon_group_ids=item.addon_group_ids
     )
 
     handler = CreateItemHandler(db)
@@ -335,6 +338,20 @@ def get_item_by_name(
     handler = GetItemByNameQueryHandler(db)
     return handler.handle(query)
 
+
+
+# ==========================
+# GET ITEMS BY VENDOR ID
+# ==========================
+@item_router.get("/vendor/{vendor_id}", response_model=List[schemas.ItemResponse])
+def get_items_by_vendor(
+    vendor_id: int,
+    db: Session = Depends(database.get_db),
+    # current_user=Depends(oauth2.role_required(["admin"])),
+):
+    query = GetItemByVendorIdQuery(vendor_id=vendor_id)
+    handler = GetItemByVendorIdQueryHandler(db)
+    return handler.handle(query)
 
 
 # ==========================
@@ -389,7 +406,8 @@ def update_item(
         category_id=item.category_id,
         image_url=item.image_url,
         is_available=item.is_available,
-        allows_addons=item.allows_addons
+        allows_addons=item.allows_addons,
+        addon_group_ids=item.addon_group_ids
     )
     handler = UpdateItemHandler(db)
     return handler.handle(command)

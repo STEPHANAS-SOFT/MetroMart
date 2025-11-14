@@ -1,8 +1,8 @@
-"""Add new entities for complete FoodSphere implementation
+"""average-rating-added-to-vendor-view
 
-Revision ID: 9efe7ce1340a
-Revises: c9ea75111058
-Create Date: 2025-10-24 21:13:38.511534
+Revision ID: 19bb4998c9cc
+Revises: 72f004606f97
+Create Date: 2025-11-13 19:56:24.723849
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '9efe7ce1340a'
-down_revision: Union[str, Sequence[str], None] = 'c9ea75111058'
+revision: str = '19bb4998c9cc'
+down_revision: Union[str, Sequence[str], None] = '72f004606f97'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

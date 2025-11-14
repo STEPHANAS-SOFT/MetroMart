@@ -7,7 +7,7 @@ from ...shared.api_key_route import verify_api_key
 from ...models import Item, ItemVariation, Order, OrderItem, OrderStatus
 from decimal import Decimal
 
-router = APIRouter(prefix="/orders", tags=["orders"])
+router = APIRouter(prefix="/orders", tags=["order views"])
 
 
 class OrderLine(BaseModel):

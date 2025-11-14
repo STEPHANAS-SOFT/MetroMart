@@ -7,7 +7,7 @@ from ...shared.api_key_route import verify_api_key
 from ...schemas import VendorResponse, ItemResponse
 from ...models import Vendor, Item, ItemCategory
 
-router = APIRouter(prefix="/search", tags=["search"])
+router = APIRouter(prefix="/search", tags=["search views"])
 
 
 @router.get("/vendors", response_model=List[VendorResponse], dependencies=[Depends(verify_api_key)])

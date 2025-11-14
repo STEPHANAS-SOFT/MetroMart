@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, TIMESTAMP, Float, Boolean, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, TIMESTAMP, Float, Boolean, ForeignKey, Enum, Table, ARRAY
 from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from .shared.database import Base
@@ -128,11 +128,14 @@ class Vendor(Base):
     fcm_token = Column(String)  # For order notifications
     opening_time = Column(String)  # Daily opening time
     closing_time = Column(String)  # Daily closing time
+    rating = Column(Float, default=0.0)  # Average customer rating
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True), onupdate=datetime.utcnow)
 
     # Relationships
     items = relationship("Item", back_populates="vendor")
+    # item_categories = relationship("ItemCategory", back_populates="vendor", cascade="all, delete-orphan")
+    item_addon_groups = relationship("ItemAddonGroup", back_populates="vendor", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="vendor")
     wallet = relationship("VendorWallet", back_populates="vendor", uselist=False)
 
@@ -142,16 +145,30 @@ class ItemCategory(Base):
     
     Used to organize items in the menu and make navigation easier for users.
     Categories help in filtering and organizing items within a vendor's menu.
+    Each category belongs to a specific vendor.
     """
     __tablename__ = "item_categories"
 
     id = Column(Integer, primary_key=True, nullable=False)
+    # vendor_id = Column(Integer, ForeignKey("vendors.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)      # e.g., "Swallow", "Rice Dishes"
     description = Column(String)               # Optional category description
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
 
     # Relationships
+    # vendor = relationship("Vendor", back_populates="item_categories")
     items = relationship("Item", back_populates="category", cascade="all, delete-orphan")
+
+
+# Association table for many-to-many relationship between Item and ItemAddonGroup
+item_addon_group_association = Table(
+    'item_addon_group_association',
+    Base.metadata,
+    Column('item_id', Integer, ForeignKey('items.id', ondelete='CASCADE'), primary_key=True),
+    Column('addon_group_id', Integer, ForeignKey('item_addon_groups.id', ondelete='CASCADE'), primary_key=True),
+    Column('created_at', TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
+)
+
 
 class Item(Base):
     """
@@ -159,19 +176,18 @@ class Item(Base):
     
     This model is designed to handle the complexity of Nigerian cuisine, including:
     - Base items with customizable options
-    - Support for various add-ons (soups, proteins, drinks)
+    - Reference to an addon group for customizable options
     - Different portion sizes/variations
     - Flexible pricing structure
     
     Examples:
-    1. Semo (base item) with:
-       - Choice of soups (Egusi, Vegetable, Okro)
-       - Optional proteins (Meat, Fish)
-       - Optional drinks
+    1. Semo (base item) linked to:
+       - Addon group for soups (Egusi, Vegetable, Okro)
+       - Addon group for proteins (Meat, Fish)
     2. Jollof Rice with:
        - Different portions (small, large)
-       - Optional proteins
-       - Optional sides
+       - Addon group for proteins
+       - Addon group for sides
     """
     __tablename__ = "items"
 
@@ -184,12 +200,14 @@ class Item(Base):
     image_url = Column(String)
     is_available = Column(Boolean, default=True)
     allows_addons = Column(Boolean, default=False)  # Whether item can have add-ons
+    addon_group_ids = Column(ARRAY(Integer), default=list, nullable=True)  # Comma-separated list of addon group IDs
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True), onupdate=datetime.utcnow)
 
     # Relationships
     vendor = relationship("Vendor", back_populates="items")
     category = relationship("ItemCategory", back_populates="items")
+    # addon_groups = relationship("ItemAddonGroup", secondary=item_addon_group_association, back_populates="items")
     order_items = relationship("OrderItem", back_populates="item")
     variations = relationship("ItemVariation", back_populates="item")
 
@@ -328,28 +346,33 @@ class Order(Base):
 
 class ItemAddonGroup(Base):
     """
-    Represents a group of related add-ons for an item (e.g., Soups for Semo).
+    Represents a group of related add-ons that can be linked to items (e.g., Soups group, Proteins group).
     
     This model manages collections of related add-ons and their selection rules:
     - Groups similar add-ons (e.g., all available soups, proteins, or drinks)
     - Controls selection requirements (required/optional)
     - Manages selection limits (minimum and maximum choices)
+    - Each addon group belongs to a specific vendor
+    - Items reference this group to enable add-ons
     
     Examples:
-    1. Soups group for Semo:
+    1. "Soups" addon group:
        - Required selection
        - Min: 1, Max: 1 (must choose exactly one soup)
-    2. Proteins group:
+       - Can be linked to multiple items (Semo, Fufu, etc.)
+    2. "Proteins" addon group:
        - Optional selection
        - Min: 0, Max: 3 (can choose up to 3 proteins)
-    3. Drinks group:
+       - Can be linked to multiple items
+    3. "Drinks" addon group:
        - Optional selection
        - Min: 0, Max: 1 (can choose one drink)
+       - Can be linked to multiple items
     """
     __tablename__ = "item_addon_groups"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    item_id = Column(Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False)
+    vendor_id = Column(Integer, ForeignKey("vendors.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)  # e.g., "Soups", "Proteins", "Drinks"
     description = Column(String)
     is_required = Column(Boolean, default=False)  # Whether selection is mandatory
@@ -358,7 +381,9 @@ class ItemAddonGroup(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
 
     # Relationships
-    addons = relationship("ItemAddon", back_populates="group")
+    vendor = relationship("Vendor", back_populates="item_addon_groups")
+    # items = relationship("Item", secondary=item_addon_group_association, back_populates="addon_groups")
+    addons = relationship("ItemAddon", back_populates="group", cascade="all, delete-orphan")
 
 class ItemAddon(Base):
     """
@@ -389,6 +414,7 @@ class ItemAddon(Base):
     name = Column(String, nullable=False)  # e.g., "Egusi Soup", "Goat Meat", "Coca-Cola"
     description = Column(String)
     price = Column(Float, nullable=False)  # Additional cost for this add-on
+    image_url = Column(String)
     is_available = Column(Boolean, default=True)  # Current availability status
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
 
@@ -840,5 +866,4 @@ class WalletTransaction(Base):
 
 
 # Configure relationships after all models are defined
-Item.addon_groups = relationship("ItemAddonGroup", back_populates="item")
-ItemAddonGroup.item = relationship("Item", back_populates="addon_groups")
+# Note: Item.addon_group and ItemAddonGroup.items relationships are now defined in the models above

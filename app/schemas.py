@@ -79,6 +79,7 @@ class ItemBase(BaseModel):
     allows_addons: Optional[bool]
     vendor_id: int
     category_id: int
+    addon_group_ids: Optional[List[int]] = []
 
 
     class Config:
@@ -98,6 +99,7 @@ class ItemUpdate(BaseModel):
     is_available: Optional[bool]
     allows_addons: Optional[bool]
     category_id: Optional[int]
+    addon_group_ids: Optional[List[int]] = None
 
     class Config:
         from_attributes = True
@@ -234,6 +236,7 @@ class VendorBase(BaseModel):
     logo_url: Optional[str] = None
     has_own_delivery: Optional[bool] = False
     is_active: Optional[bool] = True
+    rating: Optional[float] = 0.0
     fcm_token: Optional[str] = None
     opening_time: Optional[str] = None
     closing_time: Optional[str] = None
@@ -257,6 +260,7 @@ class VendorUpdate(BaseModel):
     logo_url: Optional[str] = None
     has_own_delivery: Optional[bool] = None
     is_active: Optional[bool] = None
+    rating: Optional[float] = None
     fcm_token: Optional[str] = None
     opening_time: Optional[str] = None
     closing_time: Optional[str] = None
@@ -278,7 +282,7 @@ class VendorResponse(VendorBase):
 # ====================================================
 
 class ItemAddonGroupBase(BaseModel):
-    item_id: int
+    vendor_id: int
     name: str
     description: Optional[str] = None
     is_required: Optional[bool] = False
@@ -315,6 +319,7 @@ class ItemAddonBase(BaseModel):
     name: str
     description: Optional[str] = None
     price: float
+    image_url: Optional[str] = None
     is_available: Optional[bool] = True
 
     class Config:
@@ -327,6 +332,7 @@ class ItemAddonUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     price: Optional[float] = None
+    image_url: Optional[str] = None
     is_available: Optional[bool] = None
 
 class ItemAddonResponse(ItemAddonBase):
@@ -462,7 +468,7 @@ class OrderBase(BaseModel):
     status: Optional[OrderStatus] = OrderStatus.PENDING
     subtotal: float
     delivery_fee: Optional[float] = None
-    total: float
+    total_amount: float
     notes: Optional[str] = None
     estimated_delivery_time: Optional[datetime] = None
 
@@ -476,7 +482,7 @@ class OrderUpdate(BaseModel):
     rider_id: Optional[int] = None
     status: Optional[OrderStatus] = None
     delivery_fee: Optional[float] = None
-    total: Optional[float] = None
+    total_amount: Optional[float] = None
     notes: Optional[str] = None
     estimated_delivery_time: Optional[datetime] = None
 

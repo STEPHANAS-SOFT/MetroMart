@@ -10,7 +10,7 @@ from ...shared.api_key_route import verify_api_key
 from ...schemas import UserResponse, UserCreate, UserUpdate
 from ...models import User, Order, OrderStatus, DeliveryAddress, UserWallet, WalletTransaction
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["user views"])
 
 
 class UserProfile(BaseModel):
@@ -164,6 +164,75 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/profile/firebase/{firebase_uid}", response_model=UserProfile, dependencies=[Depends(verify_api_key)])
+def get_user_profile_by_firebase_uid(firebase_uid: str, db: Session = Depends(get_db)):
+    """Get comprehensive user profile with statistics by Firebase UID"""
+    user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User with Firebase UID {firebase_uid} not found")
+    
+    # Get order statistics
+    orders = db.query(Order).filter(Order.user_id == user.id).all()
+    total_orders = len(orders)
+    completed_orders = len([o for o in orders if o.status == OrderStatus.DELIVERED])
+    cancelled_orders = len([o for o in orders if o.status == OrderStatus.CANCELLED])
+    
+    # Calculate total spent (only completed orders)
+    total_spent = sum(
+        float(order.total_amount) 
+        for order in orders 
+        if order.status == OrderStatus.DELIVERED
+    )
+    
+    # Get wallet balance
+    wallet = db.query(UserWallet).filter(UserWallet.user_id == user.id).first()
+    wallet_balance = float(wallet.balance) if wallet else 0.0
+    
+    # Get favorite vendors (most ordered from)
+    vendor_orders = {}
+    for order in orders:
+        vendor_id = order.vendor_id
+        if vendor_id:
+            vendor_orders[vendor_id] = vendor_orders.get(vendor_id, 0) + 1
+    
+    # Get top 3 vendors
+    top_vendors = sorted(vendor_orders.items(), key=lambda x: x[1], reverse=True)[:3]
+    favorite_vendors = [f"Vendor {vendor_id}" for vendor_id, _ in top_vendors]  # Would join with Vendor table in real app
+    
+    # Get delivery addresses count
+    delivery_addresses_count = db.query(DeliveryAddress).filter(DeliveryAddress.user_id == user.id).count()
+    
+    # Last order date
+    last_order_date = None
+    if orders:
+        last_order_date = max(order.created_at for order in orders)
+    
+    # Determine if premium customer (>$500 spent or >10 orders)
+    is_premium_customer = total_spent > 500 or completed_orders > 10
+    
+    return UserProfile(
+        id=user.id,
+        firebase_uid=user.firebase_uid,
+        email=user.email,
+        phone_number=user.phone_number,
+        full_name=user.full_name,
+        latitude=user.latitude,
+        longitude=user.longitude,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        total_orders=total_orders,
+        completed_orders=completed_orders,
+        cancelled_orders=cancelled_orders,
+        total_spent=total_spent,
+        wallet_balance=wallet_balance,
+        favorite_vendors=favorite_vendors,
+        delivery_addresses_count=delivery_addresses_count,
+        last_order_date=last_order_date,
+        is_premium_customer=is_premium_customer
+    )
+
+
+    
 @router.get("/analytics/summary", dependencies=[Depends(verify_api_key)])
 def get_users_analytics_summary(db: Session = Depends(get_db)):
     """Get overall user analytics summary"""
