@@ -73,12 +73,14 @@ class UserResponse(UserBase):
 class ItemBase(BaseModel):
     name: str
     base_price: float
+    vendor_id: int
+    category_id: int
+    quantity: Optional[int]
     description: Optional[str]
     image_url: Optional[str]
     is_available: Optional[bool]
     allows_addons: Optional[bool]
-    vendor_id: int
-    category_id: int
+    # variation_id: Optional[int] 
     addon_group_ids: Optional[List[int]] = []
 
 
@@ -113,6 +115,28 @@ class ItemResponse(ItemBase):
         from_attributes = True
 
 
+class ItemOrder(ItemBase):
+    id: int
+    
+
+    class Config:
+        from_attributes = True
+
+# class ItemAddonGroupResponse(BaseModel):
+#     id: int
+#     name: str
+#     base_price: float
+#     description: Optional[str]
+#     image_url: Optional[str]
+#     is_available: Optional[bool]
+#     allows_addons: Optional[bool]
+#     vendor_id: int
+#     category_id: int
+#     # addon_groups: List[ItemAddonGroupResponse]
+
+
+# class ItemWithAddonGroupsResponse(ItemAddonGroupResponse):
+#     addon_groups: List[ItemAddonGroupResponse]
 
 # ====================================================
 # ITEM CATEGORY SCHEMAS
@@ -139,7 +163,6 @@ class ItemCategoryResponse(ItemCategoryBase):
     class Config:
         from_attributes = True
 
-
 # ====================================================
 # DELIVERY ADDRESS SCHEMAS
 # ====================================================
@@ -149,6 +172,7 @@ class DeliveryAddressBase(BaseModel):
     address: str
     latitude: float
     longitude: float
+    name: Optional[str]
     is_default: Optional[bool] = False
 
     class Config:
@@ -161,7 +185,9 @@ class DeliveryAddressUpdate(BaseModel):
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    name: Optional[str] = None
     is_default: Optional[bool] = None
+
 
 class DeliveryAddressResponse(DeliveryAddressBase):
     id: int
@@ -404,7 +430,7 @@ class OrderItemAddonResponse(OrderItemAddonBase):
 class OrderItemBase(BaseModel):
     order_id: int
     item_id: int
-    variation_id: Optional[int] = None
+    # variation_id: Optional[int] = None
     quantity: int
     unit_price: float
     subtotal: float
@@ -463,12 +489,12 @@ class OrderTrackingResponse(OrderTrackingBase):
 class OrderBase(BaseModel):
     user_id: int
     vendor_id: int
-    rider_id: Optional[int] = None
-    delivery_address_id: int
-    status: Optional[OrderStatus] = OrderStatus.PENDING
     subtotal: float
+    total: float
     delivery_fee: Optional[float] = None
-    total_amount: float
+    status: Optional[OrderStatus] = OrderStatus.PENDING
+    rider_id: Optional[int] = None
+    delivery_address_id: Optional[int] = None
     notes: Optional[str] = None
     estimated_delivery_time: Optional[datetime] = None
 
@@ -476,15 +502,21 @@ class OrderBase(BaseModel):
         from_attributes = True
 
 class OrderCreate(OrderBase):
-    items: List[OrderItemCreate]
+    items: List[ItemOrder]
+
+    class Config:
+        from_attributes = True
 
 class OrderUpdate(BaseModel):
     rider_id: Optional[int] = None
     status: Optional[OrderStatus] = None
     delivery_fee: Optional[float] = None
-    total_amount: Optional[float] = None
+    total: Optional[float] = None
     notes: Optional[str] = None
     estimated_delivery_time: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class OrderResponse(OrderBase):
     id: int
@@ -495,6 +527,21 @@ class OrderResponse(OrderBase):
 
     class Config:
         from_attributes = True
+
+# class OrderResponse(BaseModel):
+#     id: int
+#     user_id: int
+#     vendor_id: int
+#     delivery_address_id: int
+#     subtotal: float
+#     delivery_fee: float
+#     total: float
+#     notes: str | None
+#     created_at: datetime
+#     items: list[OrderItemBase]
+
+#     class Config:
+#         orm_mode = True
 
 
 # ====================================================

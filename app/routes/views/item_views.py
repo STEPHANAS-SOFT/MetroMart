@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.expression import any_
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -7,7 +8,7 @@ from datetime import datetime
 from ...shared.database import get_db
 from ...shared.api_key_route import verify_api_key
 from ...schemas import ItemResponse, ItemCreate, ItemUpdate
-from ...models import Item, ItemCategory, ItemVariation, ItemAddon, Vendor
+from ...models import Item, ItemCategory, ItemVariation, ItemAddon, Vendor, ItemAddonGroup
 
 router = APIRouter(prefix="/items", tags=["item views"])
 
@@ -51,6 +52,37 @@ class ItemWithDetails(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ItemAddonResponse(BaseModel):
+    id: int
+    name: str
+    price: float
+    is_available: bool
+    image_url: Optional[str]
+    description: Optional[str]
+
+
+class ItemAddonGroupResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    addons: List[ItemAddonResponse]  # Include addons in the response
+
+
+class ItemWithAddonGroupsResponse(ItemResponse):
+    addon_groups: List[ItemAddonGroupResponse]
+
+
+class ItemVariationResponse(BaseModel):
+    id: int
+    name: str
+    price: float
+    description: Optional[str]
+
+
+class ItemWithAddonGroupsAndVariationsResponse(ItemWithAddonGroupsResponse):
+    variations: List[ItemVariationResponse]  # Include variations in the response
 
 
 @router.get("/", response_model=List[ItemResponse], dependencies=[Depends(verify_api_key)])
@@ -130,13 +162,70 @@ def get_items_with_details(
     return items_data
 
 
-@router.get("/{item_id}", response_model=ItemResponse, dependencies=[Depends(verify_api_key)])
+@router.get("/{item_id}", response_model=ItemWithAddonGroupsAndVariationsResponse, dependencies=[Depends(verify_api_key)])
 def get_item_by_id(item_id: int, db: Session = Depends(get_db)):
-    """Get a specific item by ID"""
+    """Get a specific item by ID with addon group data and variations"""
+    # Query the item
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail=f"Item with ID {item_id} not found")
-    return item
+
+    # Query addon groups
+    addon_groups = (
+        db.query(ItemAddonGroup)
+        .join(Item, ItemAddonGroup.id == any_(Item.addon_group_ids))
+        .filter(Item.id == item_id)
+        .all()
+    )
+
+    # Query addons for each group
+    addon_groups_with_addons = []
+    for group in addon_groups:
+        addons = db.query(ItemAddon).filter(ItemAddon.group_id == group.id).all()
+        addon_groups_with_addons.append({
+            "id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "addons": [
+                {
+                    "id": addon.id,
+                    "name": addon.name,
+                    "price": addon.price,
+                    "image_url": addon.image_url,
+                    "is_available": addon.is_available,
+                    "description": addon.description
+                }
+                for addon in addons
+            ]
+        })
+
+    # Query variations
+    variations = db.query(ItemVariation).filter(ItemVariation.item_id == item_id).all()
+
+    # Construct the response
+    return {
+        "id": item.id,
+        "name": item.name,
+        "description": item.description,
+        "base_price": item.base_price,
+        "image_url": item.image_url,
+        "is_available": item.is_available,
+        "allows_addons": item.allows_addons,
+        "vendor_id": item.vendor_id,
+        "category_id": item.category_id,
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
+        "addon_groups": addon_groups_with_addons,
+        "variations": [
+            {
+                "id": variation.id,
+                "name": variation.name,
+                "price": variation.price,
+                "description": variation.description
+            }
+            for variation in variations
+        ]
+    }
 
 
 @router.get("/vendor/{vendor_id}/menu", response_model=List[ItemResponse], dependencies=[Depends(verify_api_key)])

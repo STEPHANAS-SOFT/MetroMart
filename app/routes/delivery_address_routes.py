@@ -13,7 +13,8 @@ from ..services.commands import (
 from ..services.queries import (
     GetAllDeliveryAddressQuery, GetAllDeliveryAddressQueryHandler,
     GetDeliveryAddressByIdQuery, GetDeliveryAddressByIdQueryHandler,
-    GetDeliveryAddressByUserIdQuery, GetDeliveryAddressByUserIdQueryHandler
+    GetDeliveryAddressByUserIdQuery, GetDeliveryAddressByUserIdQueryHandler,
+    GetUserByIdQuery, GetUserByIdQueryHandler
 )
 
 
@@ -35,12 +36,21 @@ def create_delivery_address(
     address: schemas.DeliveryAddressCreate,
     db: Session = Depends(database.get_db),
 ):
+    # Validate user_id
+    try:
+        user_query = GetUserByIdQuery(user_id=address.user_id)
+        user_handler = GetUserByIdQueryHandler(db)
+        user_handler.handle(user_query)
+    except NoResultFound:
+        raise HTTPException(status_code=400, detail="Invalid user_id: User does not exist.")
+
     command = CreateDeliveryAddressCommand(
         user_id=address.user_id,
         address=address.address,
         latitude=address.latitude,
         longitude=address.longitude,
-        is_default=address.is_default
+        is_default=address.is_default,
+        name=address.name 
     )
     handler = CreateDeliveryAddressHandler(db)
     return handler.handle(command)
@@ -98,7 +108,8 @@ def update_delivery_address(
         address=address.address,
         latitude=address.latitude,
         longitude=address.longitude,
-        is_default=address.is_default
+        is_default=address.is_default,
+        name=address.name 
     )
     handler = UpdateDeliveryAddressHandler(db)
     return handler.handle(command)

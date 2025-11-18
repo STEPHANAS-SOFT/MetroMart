@@ -12,6 +12,8 @@ from ..models import (
 from ..utils.errors import ErrorHandler, ErrorMessages
 from dataclasses import dataclass
 from typing import Optional, List
+from ..schemas import ItemBase
+from ..models import order_items_association
 
 
 # =============================================================================================================
@@ -433,96 +435,114 @@ class CreateItemCommand:
     is_available: Optional[bool] = True
     allows_addons: Optional[bool] = False
     addon_group_ids: Optional[List[int]] = None
+
+# class OrderItemCommand(BaseModel):
+#     item_id: int
+#     quantity: int
+#     unit_price: float
+
+# class CreateOrderCommand:
+#     user_id: int
+#     vendor_id: int
+#     status: str
+#     subtotal: float
+#     delivery_fee: float
+#     total: float
+#     items: List[ItemBase]
+#     rider_id: int | None = None
+#     delivery_address_id: int | None = None
+#     notes: str | None = None
+#     estimated_delivery_time: str | None = None
     
 
 class CreateItemHandler:
-    def __init__(self, db: Session):
-        self.db = db
+        def __init__(self, db: Session):
+            self.db = db
 
-    def handle(self, command: CreateItemCommand):
-        # Validate required fields
-        if not command.name or not command.name.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Item name is required and cannot be empty"
-            )
-
-        if command.base_price is None or command.base_price < 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Base price is required and must be a positive number"
-            )
-
-        if command.vendor_id <= 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Valid vendor ID is required"
-            )
-
-        if command.category_id and command.category_id <= 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Invalid category ID. Category ID must be a positive number"
-            )
-
-        # Verify vendor exists
-        vendor = self.db.query(Vendor).filter(Vendor.id == command.vendor_id).first()
-        if not vendor:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
-                detail=f"Vendor with ID {command.vendor_id} not found. Please verify the vendor exists."
-            )
-
-        # Verify category exists if provided
-        if command.category_id:
-            category = self.db.query(ItemCategory).filter(ItemCategory.id == command.category_id).first()
-            if not category:
+        def handle(self, command):
+            # Validate required fields
+            if not command.name or not command.name.strip():
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, 
-                    detail=f"Category with ID {command.category_id} not found. Please select a valid category."
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="Item name is required and cannot be empty"
                 )
 
-        # Verify addon groups exist and belong to vendor if provided
-        addon_group_ids = []
-        if command.addon_group_ids:
-            for group_id in command.addon_group_ids:
-                addon_group = self.db.query(ItemAddonGroup).filter(ItemAddonGroup.id == group_id).first()
-                if not addon_group:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Addon group with ID {group_id} not found. Please select a valid addon group."
-                    )
-                if addon_group.vendor_id != command.vendor_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Addon group with ID {group_id} does not belong to vendor with ID {command.vendor_id}."
-                    )
-                addon_group_ids.append(group_id)
+            if command.base_price is None or command.base_price < 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="Base price is required and must be a positive number"
+                )
 
-        try:
-            # Create item with addon_group_ids as array
-            item = Item(
-                name=command.name,
-                base_price=command.base_price,
-                description=command.description,
-                image_url=command.image_url,
-                is_available=command.is_available,
-                allows_addons=command.allows_addons,
-                category_id=command.category_id,
-                vendor_id=command.vendor_id,
-                addon_group_ids=addon_group_ids  # <-- assign the array here
-            )
+            if command.vendor_id <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="Valid vendor ID is required"
+                )
 
-            self.db.add(item)
-            self.db.commit()
-            self.db.refresh(item)
-            return item
-        except Exception as e:
-            self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create menu item. Please try again. Error: {str(e)}"
-            )
+            if command.category_id and command.category_id <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="Invalid category ID. Category ID must be a positive number"
+                )
+
+            # Verify vendor exists
+            vendor = self.db.query(Vendor).filter(Vendor.id == command.vendor_id).first()
+            if not vendor:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, 
+                    detail=f"Vendor with ID {command.vendor_id} not found. Please verify the vendor exists."
+                )
+
+            # Verify category exists if provided
+            if command.category_id:
+                category = self.db.query(ItemCategory).filter(ItemCategory.id == command.category_id).first()
+                if not category:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND, 
+                        detail=f"Category with ID {command.category_id} not found. Please select a valid category."
+                    )
+
+            # Verify addon groups exist and belong to vendor if provided
+            addon_group_ids = []
+            if command.addon_group_ids:
+                for group_id in command.addon_group_ids:
+                    addon_group = self.db.query(ItemAddonGroup).filter(ItemAddonGroup.id == group_id).first()
+                    if not addon_group:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Addon group with ID {group_id} not found. Please select a valid addon group."
+                        )
+                    if addon_group.vendor_id != command.vendor_id:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Addon group with ID {group_id} does not belong to vendor with ID {command.vendor_id}."
+                        )
+                    addon_group_ids.append(group_id)
+
+            try:
+                # Create item with addon_group_ids as array
+                item = Item(
+                    name=command.name,
+                    base_price=command.base_price,
+                    description=command.description,
+                    image_url=command.image_url,
+                    is_available=command.is_available,
+                    allows_addons=command.allows_addons,
+                    category_id=command.category_id,
+                    vendor_id=command.vendor_id,
+                    addon_group_ids=addon_group_ids  # <-- assign the array here
+                )
+
+                self.db.add(item)
+                self.db.commit()
+                self.db.refresh(item)
+                return item
+            except Exception as e:
+                self.db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to create menu item. Please try again. Error: {str(e)}"
+                )
 
 
 
@@ -878,6 +898,7 @@ class CreateDeliveryAddressCommand:
     latitude: float
     longitude: float
     is_default: Optional[bool] = False
+    name: Optional[str] = None
 
 class CreateDeliveryAddressHandler:
     def __init__(self, db: Session):
@@ -889,7 +910,8 @@ class CreateDeliveryAddressHandler:
             address=command.address,
             latitude=command.latitude,
             longitude=command.longitude,
-            is_default=command.is_default
+            is_default=command.is_default,
+            name=command.name
         )
         self.db.add(delivery_address)
         self.db.commit()
@@ -903,6 +925,7 @@ class UpdateDeliveryAddressCommand:
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     is_default: Optional[bool] = None
+    name: Optional[str] = None
 
 class UpdateDeliveryAddressHandler:
     def __init__(self, db: Session):
@@ -923,6 +946,8 @@ class UpdateDeliveryAddressHandler:
             update_data[DeliveryAddress.longitude] = command.longitude
         if command.is_default is not None:
             update_data[DeliveryAddress.is_default] = command.is_default
+        if command.name is not None:
+            update_data[DeliveryAddress.name] = command.name
         
         address_query.update(update_data)
         self.db.commit()
@@ -1332,25 +1357,59 @@ class DeleteItemVariationHandler:
 class CreateOrderCommand:
     user_id: int
     vendor_id: int
-    delivery_address_id: int
+    status: str
     subtotal: float
+    delivery_fee: float
     total: float
-    rider_id: Optional[int] = None
-    status: Optional[OrderStatus] = OrderStatus.PENDING
-    delivery_fee: Optional[float] = None
-    notes: Optional[str] = None
-    estimated_delivery_time: Optional[datetime] = None
+    items: List[ItemBase]
+    rider_id: int | None = None
+    delivery_address_id: int | None = None
+    notes: str | None = None
+    estimated_delivery_time: str | None = None
+
 
 class CreateOrderHandler:
     def __init__(self, db: Session):
         self.db = db
 
     def handle(self, command: CreateOrderCommand):
+
+        # Validate OrderStatus
+        if isinstance(command.status, str):
+            try:
+                command.status = OrderStatus(command.status.lower())
+            except ValueError:
+                valid = [v.value for v in OrderStatus]
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid status '{command.status}'. Allowed: {', '.join(valid)}"
+                )
+
+        # Validate user, vendor, delivery address
+        from ..models import User, Vendor, DeliveryAddress
+
+        if not self.db.query(User).filter(User.id == command.user_id).first():
+            raise HTTPException(404, "User not found")
+
+        if not self.db.query(Vendor).filter(Vendor.id == command.vendor_id).first():
+            raise HTTPException(404, "Vendor not found")
+
+        if command.delivery_address_id and \
+            not self.db.query(DeliveryAddress).filter(DeliveryAddress.id == command.delivery_address_id).first():
+            raise HTTPException(404, "Delivery address not found")
+
+        rider_id = command.rider_id if command.rider_id not in [0, "0", None, ""] else None
+        delivery_address_id = command.delivery_address_id if command.delivery_address_id not in [0, "0", None, ""] else None
+        
+
+        # ----------------------------
+        # 1. Create Order
+        # ----------------------------
         order = Order(
             user_id=command.user_id,
             vendor_id=command.vendor_id,
-            rider_id=command.rider_id,
-            delivery_address_id=command.delivery_address_id,
+            rider_id=rider_id,
+            delivery_address_id=delivery_address_id,
             status=command.status,
             subtotal=command.subtotal,
             delivery_fee=command.delivery_fee,
@@ -1358,10 +1417,41 @@ class CreateOrderHandler:
             notes=command.notes,
             estimated_delivery_time=command.estimated_delivery_time
         )
+
         self.db.add(order)
-        self.db.commit()
-        self.db.refresh(order)
-        return order
+        self.db.flush()   # IMPORTANT: generates order.id
+
+        # ----------------------------
+        # 2. Add Items (Many-to-Many)
+        # ----------------------------
+        for item_cmd in command.items:
+
+            item = self.db.query(Item).filter(Item.id == item_cmd.id).first()
+            if not item:
+                raise HTTPException(404, f"Item {item_cmd.id} not found")
+
+            self.db.execute(
+                order_items_association.insert().values(
+                    order_id=order.id,
+                    item_id=item_cmd.id,
+                    quantity=item_cmd.quantity,
+                    # unit_price=item_cmd.unit_price
+                )
+            )
+
+        # ----------------------------
+        # 3. Commit
+        # ----------------------------
+        try:
+            self.db.commit()
+            self.db.refresh(order)
+            return order
+
+        except Exception as e:
+            self.db.rollback()
+            raise HTTPException(500, f"Error creating order: {str(e)}")
+
+
 
 @dataclass(frozen=True)
 class UpdateOrderCommand:

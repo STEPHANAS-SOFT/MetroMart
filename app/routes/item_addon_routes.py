@@ -40,6 +40,7 @@ def create_item_addon(
         name=addon.name,
         description=addon.description,
         price=addon.price,
+        image_url=addon.image_url,
         is_available=addon.is_available
     )
     handler = CreateItemAddonHandler(db)
@@ -98,6 +99,7 @@ def update_item_addon(
         name=addon.name,
         description=addon.description,
         price=addon.price,
+        image_url=addon.image_url,
         is_available=addon.is_available
     )
     handler = UpdateItemAddonHandler(db)

@@ -194,6 +194,8 @@ class Item(Base):
     id = Column(Integer, primary_key=True, nullable=False)
     vendor_id = Column(Integer, ForeignKey("vendors.id", ondelete="CASCADE"), nullable=False)
     category_id = Column(Integer, ForeignKey("item_categories.id"), nullable=False)
+    # variation_id = Column(Integer, ForeignKey("item_variations.id"), nullable=True)
+    quantity = Column(Integer, nullable=True)
     name = Column(String, nullable=False)
     description = Column(String)
     base_price = Column(Float, nullable=False)  # Base price without add-ons
@@ -208,8 +210,11 @@ class Item(Base):
     vendor = relationship("Vendor", back_populates="items")
     category = relationship("ItemCategory", back_populates="items")
     # addon_groups = relationship("ItemAddonGroup", secondary=item_addon_group_association, back_populates="items")
-    order_items = relationship("OrderItem", back_populates="item")
+    # order_items = relationship("OrderItem", back_populates="item")
     variations = relationship("ItemVariation", back_populates="item")
+        # Inverse relationship
+    orders = relationship("Order", secondary="order_items_association", back_populates="items")
+
 
 class DeliveryAddress(Base):
     """
@@ -240,6 +245,7 @@ class DeliveryAddress(Base):
     latitude = Column(Float, nullable=False)          # Geographic coordinates
     longitude = Column(Float, nullable=False)         # for delivery routing
     is_default = Column(Boolean, default=False)       # User's default address
+    name = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
 
     # Relationships
@@ -293,6 +299,19 @@ class Rider(Base):
     orders = relationship("Order", back_populates="rider")
     wallet = relationship("RiderWallet", back_populates="rider", uselist=False)
 
+
+# Association table for many-to-many relationship between orders and items
+order_items_association = Table(
+    "order_items_association",
+    Base.metadata,
+    Column("order_id", Integer, ForeignKey("orders.id", ondelete="CASCADE"), primary_key=True),
+    Column("item_id", Integer, ForeignKey("items.id", ondelete="CASCADE"), primary_key=True),
+    Column("quantity", Integer, nullable=False, default=1),  # optional: store quantity directly here
+    # Column("unit_price", Float, nullable=False, default=0.0)  # optional: store price at order time
+)
+
+
+
 class Order(Base):
     """
     Represents a complete order in the system.
@@ -325,13 +344,14 @@ class Order(Base):
     id = Column(Integer, primary_key=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     vendor_id = Column(Integer, ForeignKey("vendors.id", ondelete="CASCADE"), nullable=False)
-    rider_id = Column(Integer, ForeignKey("riders.id", ondelete="SET NULL"))
-    delivery_address_id = Column(Integer, ForeignKey("delivery_addresses.id", ondelete="SET NULL"), nullable=False)
+    rider_id = Column(Integer, ForeignKey("riders.id", ondelete="SET NULL"), nullable=True)
+    # variation_id = Column(Integer, ForeignKey("item_variations.id", ondelete="SET NULL"), nullable=True)
+    delivery_address_id = Column(Integer, ForeignKey("delivery_addresses.id", ondelete="SET NULL"), nullable=True)
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
-    subtotal = Column(Float, nullable=False)          # Sum of items before delivery fee
-    delivery_fee = Column(Float)                      # Calculated delivery charge
-    total = Column(Float, nullable=False)             # Final amount including all fees
-    notes = Column(String)                           # Special instructions
+    subtotal = Column(Float, nullable=False)
+    delivery_fee = Column(Float)
+    total = Column(Float, nullable=False)
+    notes = Column(String)
     estimated_delivery_time = Column(TIMESTAMP(timezone=True))
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True), onupdate=datetime.utcnow)
@@ -340,9 +360,12 @@ class Order(Base):
     user = relationship("User", back_populates="orders")
     vendor = relationship("Vendor", back_populates="orders")
     rider = relationship("Rider", back_populates="orders")
+    # variation = relationship("ItemVariation", back_populates="orders")
     delivery_address = relationship("DeliveryAddress", back_populates="orders")
-    items = relationship("OrderItem", back_populates="order")
-    tracking = relationship("OrderTracking", back_populates="order")
+
+    # Many-to-many with items
+    items = relationship("Item", secondary=order_items_association, back_populates="orders")
+
 
 class ItemAddonGroup(Base):
     """
@@ -479,8 +502,8 @@ class OrderItem(Base):
     __tablename__ = "order_items"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    item_id = Column(Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False)
+    # order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    # item_id = Column(Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False)
     variation_id = Column(Integer, ForeignKey("item_variations.id", ondelete="SET NULL"))
     quantity = Column(Integer, nullable=False)
     unit_price = Column(Float, nullable=False)  # Base price or variation price
@@ -489,8 +512,8 @@ class OrderItem(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
 
     # Relationships
-    order = relationship("Order", back_populates="items")
-    item = relationship("Item", back_populates="order_items")
+    # order = relationship("Order", back_populates="items")
+    # item = relationship("Item", back_populates="order_items")
     variation = relationship("ItemVariation", back_populates="order_items")
     addons = relationship("OrderItemAddon", back_populates="order_item")
 
@@ -550,14 +573,14 @@ class OrderTracking(Base):
     __tablename__ = "order_tracking"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    # order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     status = Column(Enum(OrderStatus), nullable=False)  # Status at this point
     latitude = Column(Float)                           # Location coordinates
     longitude = Column(Float)                          # during delivery
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
 
     # Relationships
-    order = relationship("Order", back_populates="tracking")
+    # order = relationship("Order", back_populates="tracking")
 
 
 class Cart(Base):

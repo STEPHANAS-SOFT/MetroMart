@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from ..shared import database
 from ..shared.config import settings
@@ -17,6 +18,9 @@ from ..services.queries import (
     GetOrderByVendorIdQuery, GetOrderByVendorIdQueryHandler,
     GetOrderByRiderIdQuery, GetOrderByRiderIdQueryHandler
 )
+from ..models import Order
+from ..schemas import OrderResponse, ItemOrder
+
 
 
 # =================================================================================================================
@@ -32,23 +36,22 @@ order_router = APIRouter(
 # ==========================
 # CREATE ORDER
 # ==========================
-@order_router.post("/", response_model=schemas.OrderResponse)
-def create_order(
-    order: schemas.OrderCreate,
-    db: Session = Depends(database.get_db),
-):
+@order_router.post("/", response_model=schemas.OrderCreate)
+def create_order(order: schemas.OrderCreate, db: Session = Depends(database.get_db)):
     command = CreateOrderCommand(
-        user_id=order.user_id,
-        vendor_id=order.vendor_id,
-        delivery_address_id=order.delivery_address_id,
-        subtotal=order.subtotal,
-        total=order.total,
-        rider_id=order.rider_id,
-        status=order.status,
-        delivery_fee=order.delivery_fee,
-        notes=order.notes,
-        estimated_delivery_time=order.estimated_delivery_time
-    )
+            user_id=order.user_id,
+            vendor_id=order.vendor_id,
+            status=order.status,
+            rider_id=order.rider_id,
+            delivery_address_id=order.delivery_address_id,
+            subtotal=order.subtotal,
+            delivery_fee=order.delivery_fee,
+            total=order.total,
+            notes=order.notes,
+            estimated_delivery_time=order.estimated_delivery_time,
+            items=order.items
+        )   
+    
     handler = CreateOrderHandler(db)
     return handler.handle(command)
 
@@ -58,11 +61,66 @@ def create_order(
 # ==========================
 @order_router.get("/", response_model=List[schemas.OrderResponse])
 def get_all_orders(
-    db: Session = Depends(database.get_db),
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(database.get_db)
 ):
-    query = GetAllOrderQuery()
-    handler = GetAllOrderQueryHandler(db)
-    return handler.handle(query)
+    orders = (
+        db.query(Order)
+        .options(
+            joinedload(Order.items)  # loads all item fields
+        )
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    # Build response to match create-order response
+    response = []
+    for order in orders:
+        response.append(
+            OrderResponse(
+                id=order.id,
+                user_id=order.user_id,
+                vendor_id=order.vendor_id,
+                subtotal=order.subtotal,
+                total=order.total,
+                delivery_fee=order.delivery_fee,
+                status=order.status,
+                rider_id=order.rider_id,
+                delivery_address_id=order.delivery_address_id,
+                notes=order.notes,
+                estimated_delivery_time=order.estimated_delivery_time,
+                created_at=order.created_at,
+                updated_at=order.updated_at,
+                items=[
+                    ItemOrder(
+                        id=item.id,
+                        order_id=order.id,          # required
+                        item_id=item.id,            # or the actual item ID from association
+                        name=item.name,
+                        base_price=item.base_price,
+                        unit_price=item.base_price, # or actual price per unit
+                        quantity=item.quantity,      # from association table
+                        subtotal=item.base_price,  # calculate subtotal
+                        created_at=item.created_at  # from item or association table
+                    )
+                    for item in order.items
+                ]
+            )
+        )
+
+    return response
+
+
+
+# @order_router.get("/", response_model=List[schemas.OrderResponse])
+# def get_all_orders(
+#     db: Session = Depends(database.get_db),
+# ):
+#     query = GetAllOrderQuery()
+#     handler = GetAllOrderQueryHandler(db)
+#     return handler.handle(query)
 
 
 # ==========================

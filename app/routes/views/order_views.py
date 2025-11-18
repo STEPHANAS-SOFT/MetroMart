@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from ...shared.database import get_db
 from ...shared.api_key_route import verify_api_key
-from ...models import Item, ItemVariation, Order, OrderItem, OrderStatus
+from ...models import Item, ItemVariation, Order, OrderStatus
 from decimal import Decimal
 
 router = APIRouter(prefix="/orders", tags=["order views"])

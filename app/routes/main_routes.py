@@ -293,18 +293,22 @@ item_router = APIRouter(prefix=f"{settings.api_prefix}/item", tags=["Item"], dep
 def create_item(
     item: schemas.ItemCreate,
     db: Session = Depends(database.get_db),
-    # current_user=Depends(oauth2.role_required(["admin"])),
+    # current_user=Depends(oauth2.role_required(["admin"]))
 ):
+    addon_group_ids = item.addon_group_ids
+    if isinstance(addon_group_ids, int):
+        addon_group_ids = [addon_group_ids]
+    print(f"DEBUG: Coerced addon_group_ids in POST: {addon_group_ids}")
     command = CreateItemCommand(
         name=item.name,
-        base_price=item.base_price,     
+        base_price=item.base_price,
         vendor_id=item.vendor_id,
         category_id=item.category_id,
         description=item.description,
         image_url=item.image_url,
         is_available=item.is_available,
         allows_addons=item.allows_addons,
-        addon_group_ids=item.addon_group_ids
+        addon_group_ids=addon_group_ids
     )
 
     handler = CreateItemHandler(db)
@@ -398,6 +402,10 @@ def update_item(
     db: Session = Depends(database.get_db),
     # current_user=Depends(oauth2.role_required([]))
 ):
+    addon_group_ids = item.addon_group_ids
+    if isinstance(addon_group_ids, int):
+        addon_group_ids = [addon_group_ids]
+    print(f"DEBUG: Coerced addon_group_ids in PUT: {addon_group_ids}")
     command = UpdateItemCommand(
         item_id=item_id,
         name=item.name,
@@ -407,7 +415,7 @@ def update_item(
         image_url=item.image_url,
         is_available=item.is_available,
         allows_addons=item.allows_addons,
-        addon_group_ids=item.addon_group_ids
+        addon_group_ids=addon_group_ids
     )
     handler = UpdateItemHandler(db)
     return handler.handle(command)

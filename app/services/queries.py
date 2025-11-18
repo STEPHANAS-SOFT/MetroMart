@@ -1,13 +1,13 @@
 from fastapi import HTTPException, status
 from dataclasses import dataclass
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select
 from typing import Optional
 from ..models import (
     User, Vendor, Item, ItemCategory, DeliveryAddress, 
-    Rider, Order, ItemAddonGroup, ItemAddon, 
-    ItemVariation, OrderItem, OrderItemAddon, OrderTracking, 
-    Cart, CartItem, CartItemAddon, UserWallet, VendorWallet, 
-    RiderWallet, WalletTransaction
+    Rider, Order, ItemAddonGroup, ItemAddon, OrderItem,
+    ItemVariation, Cart, CartItem, CartItemAddon, UserWallet, VendorWallet, 
+    RiderWallet, WalletTransaction, order_items_association
 )
 from ..utils.errors import ErrorHandler, ErrorMessages
 from uuid import UUID
@@ -184,40 +184,40 @@ class GetVendorByNameQueryHandler:
 class GetAllItemQuery:
     pass
 
-class GetAllItemQueryHandler:
-    def __init__(self, db: Session):
-        self.db = db
-
-    def handle(
-        self, 
-        query: GetAllItemQuery, 
-        skip: int = 0, 
-        limit: int = 10
-    ):
-        q = self.db.query(Item)
-
-        # Optional filters
-        if query.vendor_id is not None:
-            q = q.filter(Item.vendor_id == query.vendor_id)
-        if query.category_id is not None:
-            q = q.filter(Item.category_id == query.category_id)
-
-        # Pagination
-        items = q.offset(skip).limit(limit).all()
-
-        return items
-
-
 # class GetAllItemQueryHandler:
 #     def __init__(self, db: Session):
 #         self.db = db
 
-#     def handle(self, query: GetAllItemQuery, skip: int = 0, limit: int = 10):
-#         all_items = (self.db.query(Item)
-#                     .offset(skip).limit(limit).all()
-#                    )
-#         # Return empty list if no items found - this is not an error
-#         return all_items
+#     def handle(
+#         self, 
+#         query: GetAllItemQuery, 
+#         skip: int = 0, 
+#         limit: int = 10
+#     ):
+#         q = self.db.query(Item)
+
+#         # Optional filters
+#         if query.vendor_id is not None:
+#             q = q.filter(Item.vendor_id == query.vendor_id)
+#         if query.category_id is not None:
+#             q = q.filter(Item.category_id == query.category_id)
+
+#         # Pagination
+#         items = q.offset(skip).limit(limit).all()
+
+#         return items
+
+
+class GetAllItemQueryHandler:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def handle(self, query: GetAllItemQuery, skip: int = 0, limit: int = 10):
+        all_items = (self.db.query(Item)
+                    .offset(skip).limit(limit).all()
+                   )
+        # Return empty list if no items found - this is not an error
+        return all_items
 
 
 # ==========================
@@ -652,22 +652,82 @@ class GetItemVariationByItemIdQueryHandler:
 class GetAllOrderQuery:
     pass
 
+
 class GetAllOrderQueryHandler:
     def __init__(self, db: Session):
         self.db = db
 
     def handle(self, query: GetAllOrderQuery, skip: int = 0, limit: int = 10):
-        all_orders = (
+        orders = (
             self.db.query(Order)
-            .options(
-                joinedload(Order.items).joinedload(OrderItem.addons),
-                joinedload(Order.tracking)
-            )
             .offset(skip)
             .limit(limit)
             .all()
         )
-        return all_orders
+
+        result = []
+
+        for order in orders:
+            # Fetch items + quantity from association table
+            stmt = (
+                select(
+                    Item.id,
+                    Item.name,
+                    Item.base_price,
+                    order_items_association.c.quantity
+                )
+                .select_from(order_items_association)
+                .join(Item, Item.id == order_items_association.c.item_id)
+                .where(order_items_association.c.order_id == order.id)
+            )
+
+            rows = self.db.execute(stmt).fetchall()
+
+            items = [
+                {
+                    "id": row.id,
+                    "name": row.name,
+                    "base_price": row.base_price,
+                    "quantity": row.quantity
+                }
+                for row in rows
+            ]
+
+            # Final order structure
+            result.append({
+                "id": order.id,
+                "user_id": order.user_id,
+                "vendor_id": order.vendor_id,
+                "delivery_address_id": order.delivery_address_id,
+                "subtotal": order.subtotal,
+                "delivery_fee": order.delivery_fee,
+                "total": order.total,
+                "notes": order.notes,
+                "status": order.status,
+                "created_at": order.created_at,
+                "items": items
+            })
+
+        return result
+
+
+# class GetAllOrderQueryHandler:
+#     def __init__(self, db: Session):
+#         self.db = db
+
+#     def handle(self, query: GetAllOrderQuery, skip: int = 0, limit: int = 10):
+#         all_orders = (
+#             self.db.query(Order)
+#             .options(
+#                 joinedload(Order.items)
+#                 # .joinedload(OrderItem.addons),
+#                 # joinedload(Order.tracking)
+#             )
+#             .offset(skip)
+#             .limit(limit)
+#             .all()
+#         )
+#         return all_orders
 
 @dataclass
 class GetOrderByIdQuery:
